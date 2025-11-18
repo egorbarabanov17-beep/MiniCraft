@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D Minecraft: Копание блоков</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            cursor: none;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(to bottom, #1e5799, #207cca);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        
+        #game-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+            border: 4px solid #5d4037;
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            overflow: hidden;
+        }
+        
+        #game-canvas {
+            background: linear-gradient(to bottom, #87CEEB, #1e5799);
+            display: block;
+        }
+        
+        #ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 12px;
+            background: rgba(40, 40, 40, 0.85);
+            color: #f0f0f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #5d4037;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+        
+        #stats {
+            display: flex;
+            gap: 20px;
+            font-size: 16px;
+        }
+        
+        .stat-item {
+            background: rgba(93, 64, 55, 0.7);
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid #8d6e63;
+        }
+        
+        #shop {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            background: rgba(40, 40, 40, 0.9);
+            color: #f0f0f0;
+            display: none;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            border-top: 2px solid #5d4037;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+        
+        .shop-item {
+            padding: 10px 15px;
+            background: linear-gradient(to bottom, #8d6e63, #5d4037);
+            border: 2px solid #a1887f;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            min-width: 180px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        
+        .shop-item:hover {
+            background: linear-gradient(to bottom, #a1887f, #6d4c41);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+        }
+        
+        .shop-item.disabled {
+            background: linear-gradient(to bottom, #616161, #424242);
+            border-color: #757575;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .shop-item.equipped {
+            background: linear-gradient(to bottom, #4caf50, #2e7d32);
+            border-color: #66bb6a;
+        }
+        
+        button {
+            background: linear-gradient(to bottom, #8d6e63, #5d4037);
+            color: white;
+            border: 2px solid #a1887f;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+        }
+        
+        button:hover {
+            background: linear-gradient(to bottom, #a1887f, #6d4c41);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+        }
+        
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(40, 40, 40, 0.95);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            text-align: center;
+            border: 3px solid #5d4037;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
+            z-index: 20;
+            max-width: 500px;
+        }
+        
+        #message h2 {
+            margin-bottom: 15px;
+            color: #ffd54f;
+        }
+        
+        #message p {
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        
+        #custom-cursor {
+            position: absolute;
+            width: 32px;
+            height: 32px;
+            pointer-events: none;
+            z-index: 100;
+            transition: transform 0.1s;
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+        
+        .crack-overlay {
+            position: absolute;
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        .mining-progress {
+            position: absolute;
+            bottom: -5px;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .mining-progress-bar {
+            height: 100%;
+            background: linear-gradient(to right, #4caf50, #8bc34a);
+            width: 0%;
+            transition: width 0.1s;
+        }
+        
+        .block-value {
+            position: absolute;
+            color: #ffd54f;
+            font-weight: bold;
+            pointer-events: none;
+            z-index: 6;
+            text-shadow: 1px 1px 2px black;
+            animation: floatUp 1s forwards;
+        }
+        
+        @keyframes floatUp {
+            0% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+        }
+        
+        #particles-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 4;
+        }
+        
+        .particle {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: #ffd54f;
+            border-radius: 50%;
+            pointer-events: none;
+            animation: particleFloat 1s forwards;
+        }
+        
+        @keyframes particleFloat {
+            0% {
+                opacity: 1;
+                transform: translate(0, 0);
+            }
+            100% {
+                opacity: 0;
+                transform: translate(var(--tx), var(--ty));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+        
+        <div id="particles-container"></div>
+        
+        <div id="ui-container">
+            <div id="stats">
+                <div class="stat-item">Деньги: <span id="money">0</span> монет</div>
+                <div class="stat-item">Кирка: <span id="current-pickaxe">Деревянная</span></div>
+                <div class="stat-item">Сила: <span id="pickaxe-power">1</span></div>
+            </div>
+            <button id="shop-button">Магазин кирок</button>
+        </div>
+        
+        <div id="shop">
+            <div class="shop-item equipped" data-pickaxe="wooden" data-cost="0" data-power="1">
+                <div>Деревянная кирка</div>
+                <div>0 монет</div>
+                <div>Сила: 1</div>
+            </div>
+            <div class="shop-item" data-pickaxe="stone" data-cost="50" data-power="2">
+                <div>Каменная кирка</div>
+                <div>50 монет</div>
+                <div>Сила: 2</div>
+            </div>
+            <div class="shop-item" data-pickaxe="iron" data-cost="200" data-power="4">
+                <div>Железная кирка</div>
+                <div>200 монет</div>
+                <div>Сила: 4</div>
+            </div>
+            <div class="shop-item" data-pickaxe="diamond" data-cost="1000" data-power="8">
+                <div>Алмазная кирка</div>
+                <div>1000 монет</div>
+                <div>Сила: 8</div>
+            </div>
+            <button id="close-shop">Закрыть магазин</button>
+        </div>
+        
+        <div id="message">
+            <h2>Добро пожаловать в 2D Minecraft!</h2>
+            <p>Кликайте по блокам, чтобы копать их и зарабатывать деньги. Нажмите кнопку "Магазин кирок", чтобы купить улучшенные кирки.</p>
+            <p>Разные блоки имеют разную ценность и прочность. Более ценные блоки требуют больше усилий для добычи!</p>
+            <button id="start-button">Начать игру</button>
+        </div>
+        
+        <div id="custom-cursor"></div>
+    </div>
+
+    <script>
+        // Инициализация игры
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const moneyElement = document.getElementById('money');
+        const currentPickaxeElement = document.getElementById('current-pickaxe');
+        const pickaxePowerElement = document.getElementById('pickaxe-power');
+        const shopButton = document.getElementById('shop-button');
+        const shop = document.getElementById('shop');
+        const closeShopButton = document.getElementById('close-shop');
+        const message = document.getElementById('message');
+        const startButton = document.getElementById('start-button');
+        const shopItems = document.querySelectorAll('.shop-item');
+        const customCursor = document.getElementById('custom-cursor');
+        const particlesContainer = document.getElementById('particles-container');
+
+        // Игровые переменные
+        let money = 0;
+        let currentPickaxe = 'wooden';
+        let pickaxePower = 1;
+        let blocks = [];
+        let gameStarted = false;
+        let miningBlock = null;
+        let miningProgress = 0;
+        let crackOverlays = [];
+        let blockHealthBars = [];
+
+        // Типы блоков
+        const blockTypes = [
+            { type: 'dirt', color: '#8B4513', value: 1, health: 10, frequency: 0.4 },
+            { type: 'stone', color: '#696969', value: 2, health: 20, frequency: 0.3 },
+            { type: 'coal', color: '#36454F', value: 5, health: 30, frequency: 0.15 },
+            { type: 'iron', color: '#B0C4DE', value: 10, health: 40, frequency: 0.1 },
+            { type: 'gold', color: '#FFD700', value: 25, health: 60, frequency: 0.04 },
+            { type: 'diamond', color: '#B9F2FF', value: 100, health: 100, frequency: 0.01 }
+        ];
+
+        // Кирочки
+        const pickaxes = {
+            wooden: { name: 'Деревянная', power: 1, cost: 0, cursor: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 32 32\'><rect x=\'10\' y=\'5\' width=\'12\' height=\'22\' fill=\'%238B4513\' stroke=\'%23000\' stroke-width=\'1\'/><rect x=\'5\' y=\'10\' width=\'22\' height=\'12\' fill=\'%238B4513\' stroke=\'%23000\' stroke-width=\'1\'/><rect x=\'14\' y=\'2\' width=\'4\' height=\'26\' fill=\'%23A0522D\' stroke=\'%23000\' stroke-width=\'1\'/></svg>") 16 16, auto' },
+            stone: { name: 'Каменная', power: 2, cost: 50, cursor: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 32 32\'><rect x=\'10\' y=\'5\' width=\'12\' height=\'22\' fill=\'%23696969\' stroke=\'%23000\' stroke-width=\'1\'/><rect x=\'5\' y=\'10\' width=\'22\' height=\'12\' fill=\'%23696969\' stroke=\'%23000\' stroke-width=\'1\'/><rect x=\'14\' y=\'2\' width=\'4\' height=\'26\' fill=\'%23808080\' stroke=\'%23000\' stroke-width=\'1\'/></svg>") 16 16, auto' },
+            iron: { name: 'Железная', power: 4, cost: 200, cursor: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 32 32\'><rect x=\'10\' y=\'5\' width=\'12\' height=\'22\' fill=\'%23B0C4DE\' stroke=\'%23000\' stroke-width=\'1\'/><rect x=\'5\' y=\'10\' width=\'22\' height=\'12\' fill=\'%23B0C4DE\' stroke=\'%23000\' stroke-width=\'1\'/><rect x=\'14\' y=\'2\' width=\'4\' height=\'26\' fill=\'%23D3D3D3\' stroke=\'%23000\' stroke-width=\'1\'/></svg>") 16 16, auto' },
+            diamond: { name: 'Алмазная', power: 8, cost: 1000, cursor: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 32 32\'><rect x=\'10\' y=\'5\' width=\'12\' height=\'22\' fill=\'%23B9F2FF\' stroke=\'%23000\' stroke-width=\'1\'/><rect x=\'5\' y=\'10\' width=\'22\' height=\'12\' fill=\'%23B9F2FF\' stroke=\'%23000\' stroke-width=\'1\'/><rect x=\'14\' y=\'2\' width=\'4\' height=\'26\' fill=\'%23E0FFFF\' stroke=\'%23000\' stroke-width=\'1\'/></svg>") 16 16, auto' }
+        };
+
+        // Текстуры блоков (фиксированные паттерны)
+        const blockTextures = {
+            dirt: [
+                {x: 5, y: 5, size: 2}, {x: 15, y: 10, size: 1}, {x: 25, y: 15, size: 3},
+                {x: 10, y: 25, size: 2}, {x: 30, y: 5, size: 1}, {x: 35, y: 20, size: 2}
+            ],
+            stone: [
+                {x: 5, y: 5, size: 3}, {x: 20, y: 10, size: 2}, {x: 30, y: 15, size: 1},
+                {x: 10, y: 25, size: 2}, {x: 25, y: 30, size: 1}, {x: 35, y: 5, size: 2}
+            ],
+            coal: [
+                {x: 8, y: 8, size: 2}, {x: 18, y: 12, size: 1}, {x: 28, y: 18, size: 3},
+                {x: 12, y: 28, size: 2}, {x: 32, y: 8, size: 1}, {x: 38, y: 22, size: 2}
+            ],
+            iron: [
+                {x: 6, y: 6, size: 2}, {x: 16, y: 12, size: 1}, {x: 26, y: 18, size: 3},
+                {x: 12, y: 26, size: 2}, {x: 32, y: 6, size: 1}, {x: 36, y: 22, size: 2}
+            ],
+            gold: [
+                {x: 7, y: 7, size: 2}, {x: 17, y: 12, size: 1}, {x: 27, y: 17, size: 3},
+                {x: 12, y: 27, size: 2}, {x: 32, y: 7, size: 1}, {x: 37, y: 22, size: 2}
+            ],
+            diamond: [
+                {x: 8, y: 8, size: 2}, {x: 18, y: 12, size: 1}, {x: 28, y: 16, size: 3},
+                {x: 12, y: 28, size: 2}, {x: 32, y: 8, size: 1}, {x: 36, y: 24, size: 2}
+            ],
+            grass: [
+                {x: 5, y: 5, size: 2}, {x: 15, y: 10, size: 1}, {x: 25, y: 15, size: 3},
+                {x: 10, y: 25, size: 2}, {x: 30, y: 5, size: 1}, {x: 35, y: 20, size: 2}
+            ]
+        };
+
+        // Текстуры трещин для прогресса копания
+        const crackTextures = [
+            'M10,10 L30,30 M30,10 L10,30', // Легкие повреждения
+            'M10,10 L30,30 M30,10 L10,30 M20,5 L20,35 M5,20 L35,20', // Средние повреждения
+            'M10,10 L30,30 M30,10 L10,30 M20,5 L20,35 M5,20 L35,20 M15,15 L25,25 M25,15 L15,25' // Сильные повреждения
+        ];
+
+        // Создание блоков
+        function createBlocks() {
+            blocks = [];
+            const blockSize = 40;
+            const rows = Math.floor(canvas.height / blockSize);
+            const cols = Math.floor(canvas.width / blockSize);
+            
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    // Создаем землю на верхнем слое
+                    if (row === 0) {
+                        blocks.push({
+                            x: col * blockSize,
+                            y: row * blockSize,
+                            width: blockSize,
+                            height: blockSize,
+                            type: 'grass',
+                            color: '#228B22',
+                            value: 1,
+                            health: 10,
+                            maxHealth: 10
+                        });
+                    } else {
+                        // Генерация случайного блока на основе частоты
+                        let random = Math.random();
+                        let cumulativeFrequency = 0;
+                        let selectedType = blockTypes[0];
+                        
+                        for (const type of blockTypes) {
+                            cumulativeFrequency += type.frequency;
+                            if (random <= cumulativeFrequency) {
+                                selectedType = type;
+                                break;
+                            }
+                        }
+                        
+                        blocks.push({
+                            x: col * blockSize,
+                            y: row * blockSize,
+                            width: blockSize,
+                            height: blockSize,
+                            type: selectedType.type,
+                            color: selectedType.color,
+                            value: selectedType.value,
+                            health: selectedType.health,
+                            maxHealth: selectedType.health
+                        });
+                    }
+                }
+            }
+            
+            // Создаем элементы для отображения прогресса копания
+            createCrackOverlays();
+            createHealthBars();
+        }
+
+        // Создание оверлеев для трещин
+        function createCrackOverlays() {
+            crackOverlays = blocks.map(block => {
+                return {
+                    block: block,
+                    element: null,
+                    level: 0
+                };
+            });
+        }
+
+        // Создание полосок здоровья для блоков
+        function createHealthBars() {
+            blockHealthBars = blocks.map(block => {
+                const healthBar = document.createElement('div');
+                healthBar.className = 'mining-progress';
+                healthBar.style.position = 'absolute';
+                healthBar.style.left = block.x + 'px';
+                healthBar.style.top = (block.y + block.height) + 'px';
+                healthBar.style.width = block.width + 'px';
+                healthBar.style.display = 'none';
+                
+                const progressBar = document.createElement('div');
+                progressBar.className = 'mining-progress-bar';
+                healthBar.appendChild(progressBar);
+                
+                document.getElementById('game-container').appendChild(healthBar);
+                
+                return {
+                    block: block,
+                    element: healthBar,
+                    progressBar: progressBar
+                };
+            });
+        }
+
+        // Отрисовка блоков с фиксированными текстурами
+        function drawBlocks() {
+            blocks.forEach(block => {
+                // Рисуем блок
+                ctx.fillStyle = block.color;
+                ctx.fillRect(block.x, block.y, block.width, block.height);
+                
+                // Рисуем фиксированную текстуру для блока
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                const texture = blockTextures[block.type];
+                if (texture) {
+                    texture.forEach(dot => {
+                        ctx.fillRect(
+                            block.x + dot.x * block.width / 40,
+                            block.y + dot.y * block.height / 40,
+                            dot.size,
+                            dot.size
+                        );
+                    });
+                }
+                
+                // Границы блоков
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(block.x, block.y, block.width, block.height);
+            });
+        }
+
+        // Отрисовка трещин на блоке
+        function drawCrack(block, level) {
+            if (level <= 0) return;
+            
+            const overlay = crackOverlays.find(o => o.block === block);
+            if (!overlay) return;
+            
+            // Если элемент еще не создан, создаем его
+            if (!overlay.element) {
+                overlay.element = document.createElement('div');
+                overlay.element.className = 'crack-overlay';
+                overlay.element.style.left = block.x + 'px';
+                overlay.element.style.top = block.y + 'px';
+                overlay.element.style.width = block.width + 'px';
+                overlay.element.style.height = block.height + 'px';
+                
+                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                svg.setAttribute('width', '100%');
+                svg.setAttribute('height', '100%');
+                svg.style.pointerEvents = 'none';
+                
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('stroke', 'rgba(0, 0, 0, 0.7)');
+                path.setAttribute('stroke-width', '2');
+                path.setAttribute('fill', 'none');
+                svg.appendChild(path);
+                
+                overlay.element.appendChild(svg);
+                document.getElementById('game-container').appendChild(overlay.element);
+                
+                overlay.svg = svg;
+                overlay.path = path;
+            }
+            
+            // Обновляем уровень трещин
+            overlay.level = level;
+            const crackIndex = Math.min(level - 1, crackTextures.length - 1);
+            overlay.path.setAttribute('d', crackTextures[crackIndex]);
+        }
+
+        // Обновление полосы здоровья блока
+        function updateHealthBar(block) {
+            const healthBar = blockHealthBars.find(h => h.block === block);
+            if (!healthBar) return;
+            
+            const healthPercent = (block.health / block.maxHealth) * 100;
+            healthBar.progressBar.style.width = healthPercent + '%';
+            
+            // Меняем цвет в зависимости от здоровья
+            if (healthPercent > 70) {
+                healthBar.progressBar.style.background = 'linear-gradient(to right, #4caf50, #8bc34a)';
+            } else if (healthPercent > 30) {
+                healthBar.progressBar.style.background = 'linear-gradient(to right, #ff9800, #ffc107)';
+            } else {
+                healthBar.progressBar.style.background = 'linear-gradient(to right, #f44336, #ef5350)';
+            }
+        }
+
+        // Показать полосу здоровья блока
+        function showHealthBar(block) {
+            const healthBar = blockHealthBars.find(h => h.block === block);
+            if (healthBar) {
+                healthBar.element.style.display = 'block';
+            }
+        }
+
+        // Скрыть полосу здоровья блока
+        function hideHealthBar(block) {
+            const healthBar = blockHealthBars.find(h => h.block === block);
+            if (healthBar) {
+                healthBar.element.style.display = 'none';
+            }
+        }
+
+        // Создание частиц при разрушении блока
+        function createParticles(x, y, color, count = 5) {
+            for (let i = 0; i < count; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = x + 'px';
+                particle.style.top = y + 'px';
+                particle.style.background = color;
+                
+                // Случайное направление
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.random() * 30 + 10;
+                const tx = Math.cos(angle) * distance;
+                const ty = Math.sin(angle) * distance;
+                
+                particle.style.setProperty('--tx', tx + 'px');
+                particle.style.setProperty('--ty', ty + 'px');
+                
+                particlesContainer.appendChild(particle);
+                
+                // Удаление частицы после анимации
+                setTimeout(() => {
+                    if (particle.parentNode) {
+                        particle.parentNode.removeChild(particle);
+                    }
+                }, 1000);
+            }
+        }
+
+        // Показать значение блока
+        function showBlockValue(block) {
+            const valueElement = document.createElement('div');
+            valueElement.className = 'block-value';
+            valueElement.textContent = '+' + block.value;
+            valueElement.style.left = (block.x + block.width / 2) + 'px';
+            valueElement.style.top = (block.y + block.height / 2) + 'px';
+            
+            document.getElementById('game-container').appendChild(valueElement);
+            
+            // Удаление элемента после анимации
+            setTimeout(() => {
+                if (valueElement.parentNode) {
+                    valueElement.parentNode.removeChild(valueElement);
+                }
+            }, 1000);
+        }
+
+        // Обновление кастомного курсора
+        function updateCursor() {
+            customCursor.style.cursor = pickaxes[currentPickaxe].cursor;
+            document.body.style.cursor = pickaxes[currentPickaxe].cursor;
+        }
+
+        // Перемещение кастомного курсора
+        function moveCursor(event) {
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            customCursor.style.left = x + 'px';
+            customCursor.style.top = y + 'px';
+            
+            // Анимация курсора при наведении на блок
+            const block = blocks.find(b => 
+                x >= b.x && x <= b.x + b.width &&
+                y >= b.y && y <= b.y + b.height
+            );
+            
+            if (block) {
+                customCursor.style.transform = 'scale(1.2)';
+            } else {
+                customCursor.style.transform = 'scale(1)';
+            }
+        }
+
+        // Обработка клика по блоку
+        function handleBlockClick(event) {
+            if (!gameStarted) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+            
+            // Поиск блока по координатам
+            const clickedBlock = blocks.find(block => 
+                x >= block.x && x <= block.x + block.width &&
+                y >= block.y && y <= block.y + block.height
+            );
+            
+            if (clickedBlock) {
+                // Если это новый блок для копания
+                if (miningBlock !== clickedBlock) {
+                    miningBlock = clickedBlock;
+                    miningProgress = 0;
+                    showHealthBar(clickedBlock);
+                }
+                
+                // Уменьшение здоровья блока
+                clickedBlock.health -= pickaxePower;
+                miningProgress += pickaxePower;
+                
+                // Обновление полосы здоровья
+                updateHealthBar(clickedBlock);
+                
+                // Определение уровня трещин
+                const damageLevel = Math.floor((1 - clickedBlock.health / clickedBlock.maxHealth) * 3) + 1;
+                drawCrack(clickedBlock, damageLevel);
+                
+                // Анимация курсора при копании
+                customCursor.style.transform = 'scale(0.9)';
+                setTimeout(() => {
+                    customCursor.style.transform = 'scale(1.2)';
+                }, 100);
+                
+                // Если блок разрушен
+                if (clickedBlock.health <= 0) {
+                    // Добавление денег
+                    money += clickedBlock.value;
+                    moneyElement.textContent = money;
+                    
+                    // Создание частиц
+                    createParticles(
+                        clickedBlock.x + clickedBlock.width / 2,
+                        clickedBlock.y + clickedBlock.height / 2,
+                        clickedBlock.color,
+                        8
+                    );
+                    
+                    // Показать значение блока
+                    showBlockValue(clickedBlock);
+                    
+                    // Удаление блока
+                    const index = blocks.indexOf(clickedBlock);
+                    blocks.splice(index, 1);
+                    
+                    // Скрытие полосы здоровья
+                    hideHealthBar(clickedBlock);
+                    
+                    // Удаление трещин
+                    const overlayIndex = crackOverlays.findIndex(o => o.block === clickedBlock);
+                    if (overlayIndex !== -1 && crackOverlays[overlayIndex].element) {
+                        crackOverlays[overlayIndex].element.remove();
+                        crackOverlays.splice(overlayIndex, 1);
+                    }
+                    
+                    // Удаление полосы здоровья
+                    const healthBarIndex = blockHealthBars.findIndex(h => h.block === clickedBlock);
+                    if (healthBarIndex !== -1) {
+                        blockHealthBars[healthBarIndex].element.remove();
+                        blockHealthBars.splice(healthBarIndex, 1);
+                    }
+                    
+                    miningBlock = null;
+                    miningProgress = 0;
+                    
+                    // Обновление доступности кирок в магазине
+                    updateShopItems();
+                }
+                
+                // Перерисовка
+                drawGame();
+            }
+        }
+
+        // Обновление доступности кирок в магазине
+        function updateShopItems() {
+            shopItems.forEach(item => {
+                const pickaxeType = item.dataset.pickaxe;
+                const cost = parseInt(item.dataset.cost);
+                
+                if (money >= cost) {
+                    item.classList.remove('disabled');
+                } else {
+                    item.classList.add('disabled');
+                }
+                
+                // Если это текущая кирка
+                if (pickaxeType === currentPickaxe) {
+                    item.classList.add('equipped');
+                } else {
+                    item.classList.remove('equipped');
+                }
+            });
+        }
+
+        // Покупка кирки
+        function buyPickaxe(event) {
+            const item = event.target.closest('.shop-item');
+            if (!item || item.classList.contains('disabled')) return;
+            
+            const pickaxeType = item.dataset.pickaxe;
+            const cost = parseInt(item.dataset.cost);
+            const power = parseInt(item.dataset.power);
+            
+            // Проверка, достаточно ли денег
+            if (money >= cost) {
+                // Если это не первая бесплатная кирка
+                if (cost > 0) {
+                    money -= cost;
+                    moneyElement.textContent = money;
+                }
+                
+                // Установка новой кирки
+                currentPickaxe = pickaxeType;
+                pickaxePower = power;
+                
+                // Обновление UI
+                currentPickaxeElement.textContent = pickaxes[pickaxeType].name;
+                pickaxePowerElement.textContent = pickaxePower;
+                
+                // Обновление курсора
+                updateCursor();
+                
+                // Обновление магазина
+                updateShopItems();
+                
+                // Показать сообщение об успешной покупке
+                showMessage('Успех!', `Вы купили ${pickaxes[pickaxeType].name} кирку!`);
+            }
+        }
+
+        // Показать сообщение
+        function showMessage(title, text) {
+            const messageTitle = document.getElementById('message-title');
+            const messageText = document.getElementById('message-text');
+            
+            messageTitle.textContent = title;
+            messageText.textContent = text;
+            message.style.display = 'block';
+            
+            // Автоматическое скрытие сообщения через 2 секунды
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 2000);
+        }
+
+        // Начало игры
+        function startGame() {
+            gameStarted = true;
+            message.style.display = 'none';
+            createBlocks();
+            drawGame();
+            updateShopItems();
+            updateCursor();
+        }
+
+        // Основная отрисовка игры
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawBlocks();
+        }
+
+        // Инициализация событий
+        function initEvents() {
+            canvas.addEventListener('click', handleBlockClick);
+            canvas.addEventListener('mousemove', moveCursor);
+            shopButton.addEventListener('click', () => shop.style.display = 'flex');
+            closeShopButton.addEventListener('click', () => shop.style.display = 'none');
+            startButton.addEventListener('click', startGame);
+            
+            shopItems.forEach(item => {
+                item.addEventListener('click', buyPickaxe);
+            });
+            
+            // Обработка движения мыши для кастомного курсора
+            document.addEventListener('mousemove', moveCursor);
+        }
+
+        // Инициализация игры
+        function initGame() {
+            createBlocks();
+            drawGame();
+            initEvents();
+            updateCursor();
+            
+            // Показать начальное сообщение
+            message.style.display = 'block';
+        }
+
+        // Запуск игры при загрузке страницы
+        window.onload = initGame;
+    </script>
+</body>
+</html>
